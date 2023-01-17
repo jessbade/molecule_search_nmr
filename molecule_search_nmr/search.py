@@ -4,6 +4,14 @@ from numpy.linalg import norm
 from scipy.optimize import minimize
 
 
+def matching_score(query, shifts, tau=0.05, h=1, eps=0.01, thr=10, alpha=0.05):
+    mw=MatchingWrapper(**kwargs)
+    mw.set_query(query)
+    mw.set_shifts(shifts)
+    mw.query_preprocess()
+    mw.align()
+    mw.optimize()
+    return mw.score
 
 class MatchingWrapper():
     """
@@ -23,15 +31,20 @@ class MatchingWrapper():
     def set_shifts(self, shifts):
         if not self.__dict__.get('shifts'):
             self.shifts = shifts
+            self.n_shifts = len(self.shifts)
 
     def query_preprocess(self):
+        self.query_x_vals = self.query[:, 0]
+        self.query_y_vals = self.query[:, 1]
+        self.query_x_peaks = self.query_x_vals[self.query_y_vals >= self.tau]
 
-        x_vals = self.query[:, 0]
-        y_vals = self.query[:, 1]
-
-        x_peaks = x_vals[y_vals >= tau]
-
-        return y_vals, x_vals, x_peaks
+    def align(self):
+        shifts_aligned = np.array(
+            [self.query_x_peaks[np.argmin(np.abs(self.query_x_peaks - s))] for s in self.shifts]
+        )
+        shifts_aligned[0] = np.min(self.query_x_peaks)
+        shifts_aligned[-1] = np.max(self.query_x_peaks)   
+        self.shifts_aligned = shifts_aligned  
 
     def cos_sim(self, a, b):
         return dot(a, b) / (norm(a) * norm(b))
@@ -52,28 +65,28 @@ class MatchingWrapper():
     def estimate(self, x, mu, sigma, m):
         return np.sum(
             [
-                self.kernel_f((x - mu[j] - shifts_aligned[j]) / sigma[j], m[j])
-                for j in range(n_shifts)
+                self.kernel_f((x - mu[j] - self.shifts_aligned[j]) / sigma[j], m[j])
+                for j in range(self.n_shifts)
             ],
             0,
         )
 
     def opt_fun(self, var):
 
-        mu = var[:n_shifts]
-        sigma = np.exp(var[n_shifts : 2 * n_shifts])
-        m = sigmoid(var[2 * n_shifts :])
+        mu = var[:self.n_shifts]
+        sigma = np.exp(var[self.n_shifts : 2 * self.n_shifts])
+        m = self.sigmoid(var[2 * self.n_shifts :])
 
-        estimated_y_vals = estimate(query_x_vals, mu, sigma, m)
+        estimated_y_vals = self.estimate(self.query_x_vals, mu, sigma, m)
 
         obj = (
-            -cos_sim(query_y_vals, estimated_y_vals)
-            + sum_sq_diff(query_y_vals, estimated_y_vals)
+            -self.cos_sim(self.query_y_vals, estimated_y_vals)
+            + self.sum_sq_diff(self.query_y_vals, estimated_y_vals)
             + np.sum(np.square(mu))
             + np.sum(np.square(sigma))
             + np.sum(
                 np.clip(
-                    eps + mu[:-1] + shifts_aligned[:-1] - mu[1:] - shifts_aligned[1:],
+                    eps + mu[:-1] + self.shifts_aligned[:-1] - mu[1:] - self.shifts_aligned[1:],
                     0,
                     100,
                 )
@@ -86,41 +99,32 @@ class MatchingWrapper():
     def get_spect(self, var, x_vals):
         return self.estimate(
             x_vals,
-            var[:n_shifts],
-            np.exp(var[n_shifts : 2 * n_shifts]),
-            sigmoid(var[2 * n_shifts :]),
+            var[:self.n_shifts],
+            np.exp(var[self.n_shifts : 2 * self.n_shifts]),
+            self.sigmoid(var[2 * self.n_shifts :]),
         )
 
-def matching_score(query, shifts, tau=0.05, h=1, eps=0.01, thr=10, alpha=0.05):
-    query_y_vals, query_x_vals, query_x_peaks = query_preprocess(query)
-    n_shifts = len(shifts)
 
-    ## align
-    shifts_aligned = np.array(
-        [query_x_peaks[np.argmin(np.abs(query_x_peaks - s))] for s in shifts]
-    )
-    shifts_aligned[0] = np.min(query_x_peaks)
-    shifts_aligned[-1] = np.max(query_x_peaks)
+    def optimize(self):
+        ## optimize
+        if (
+            np.max(np.abs(self.shifts_aligned - self.shifts)) > self.thr
+            or np.max([np.min(np.abs(self.shifts_aligned - x)) for x in self.query_x_peaks]) > self.thr
+        ):
 
-    ## optimize
-    if (
-        np.max(np.abs(shifts_aligned - shifts)) > thr
-        or np.max([np.min(np.abs(shifts_aligned - x)) for x in query_x_peaks]) > thr
-    ):
+            score = -100
 
-        score = -100
+        else:
 
-    else:
+            x0 = np.concatenate(
+                [np.zeros(self.n_shifts), np.log(self.h) * np.ones(self.n_shifts), np.zeros(self.n_shifts)], 0
+            )
+            opt_res = minimize(self.opt_fun, x0, method="L-BFGS-B")
+            shifts_optimized = opt_res.x[:self.n_shifts] + self.shifts_aligned
+            estimated_y_vals = self.get_spect(opt_res.x, self.query_x_vals)
 
-        x0 = np.concatenate(
-            [np.zeros(n_shifts), np.log(h) * np.ones(n_shifts), np.zeros(n_shifts)], 0
-        )
-        opt_res = minimize(opt_fun, x0, method="L-BFGS-B")
-        shifts_optimized = opt_res.x[:n_shifts] + shifts_aligned
-        estimated_y_vals = get_spect(opt_res.x, query_x_vals)
+            score = self.cos_sim(self.query_y_vals, estimated_y_vals) - self.alpha * norm(
+                shifts_optimized - self.shifts
+            )
 
-        score = cos_sim(query_y_vals, estimated_y_vals) - alpha * norm(
-            shifts_optimized - shifts
-        )
-
-    return score
+        self.score=score
