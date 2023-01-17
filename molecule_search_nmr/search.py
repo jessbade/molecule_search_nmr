@@ -111,7 +111,6 @@ class MatchingWrapper:
         )
 
     def optimize(self):
-        ## optimize
         if (
             np.max(np.abs(self.shifts_aligned - self.shifts)) > self.thr
             or np.max(
@@ -120,7 +119,7 @@ class MatchingWrapper:
             > self.thr
         ):
 
-            score = -100
+            self.score = -100
 
         else:
 
@@ -136,8 +135,6 @@ class MatchingWrapper:
             shifts_optimized = opt_res.x[: self.n_shifts] + self.shifts_aligned
             estimated_y_vals = self.get_spect(opt_res.x, self.query_x_vals)
 
-            score = self.cos_sim(
+            self.score = self.cos_sim(
                 self.query_y_vals, estimated_y_vals
             ) - self.alpha * norm(shifts_optimized - self.shifts)
-
-        self.score = score
