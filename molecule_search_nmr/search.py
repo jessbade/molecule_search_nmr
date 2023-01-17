@@ -4,7 +4,7 @@ from numpy.linalg import norm
 from scipy.optimize import minimize
 
 
-def matching_score(query, shifts, tau=0.05, h=1, eps=0.01, thr=10, alpha=0.05):
+def matching_score(query, shifts, **kwargs):
     mw = MatchingWrapper(**kwargs)
     mw.set_query(query)
     mw.set_shifts(shifts)
@@ -18,7 +18,7 @@ class MatchingWrapper:
     """ """
 
     def __init__(self, **kwargs):
-        _defaults = ("query", "shifts", "tau", "h", "eps", "threshold", "alpha")
+        _defaults = ("query", "shifts", "tau", "h", "eps", "thr", "alpha")
         _default_value = None
         self.__dict__.update(dict.fromkeys(_defaults, _default_value))
         self.__dict__.update(**kwargs)
@@ -33,7 +33,7 @@ class MatchingWrapper:
             self.n_shifts = len(self.shifts)
 
     def set_parameters(self, tau=0.05, h=1, eps=0.01, thr=10, alpha=0.05):
-        self.__dict__.update(**kwargs)
+        self.__dict__.update(tau=tau, h=1, eps=eps, thr=thr, alpha=alpha)
 
     def query_preprocess(self):
         self.query_x_vals = self.query[:, 0]
