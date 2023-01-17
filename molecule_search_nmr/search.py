@@ -32,6 +32,9 @@ class MatchingWrapper:
             self.shifts = shifts
             self.n_shifts = len(self.shifts)
 
+    def set_parameters(self, tau=0.05, h=1, eps=0.01, thr=10, alpha=0.05):
+        self.__dict__.update(**kwargs)
+
     def query_preprocess(self):
         self.query_x_vals = self.query[:, 0]
         self.query_y_vals = self.query[:, 1]
