@@ -2,7 +2,7 @@ import numpy as np
 from molecule_search_nmr.search import matching_score
 
 ## sample data import
-[query, pool] = np.load("../resources/sample_data.npz")["data"]  # , allow_pickle = True
+[query, pool] = np.load("../resources/sample_data.npz", allow_pickle=True)["data"]  #
 
 ## molecule search
 results = {}
