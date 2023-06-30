@@ -8,6 +8,7 @@ def matching_score(query, shifts, **kwargs):
     mw = MatchingWrapper(**kwargs)
     mw.set_query(query)
     mw.set_shifts(shifts)
+    mw.set_parameters()
     mw.query_preprocess()
     mw.align()
     mw.optimize()
@@ -61,7 +62,6 @@ class MatchingWrapper:
         return 1 / (1 + np.exp(-z))
 
     def kernel_f(self, z, m):
-
         gaussian = np.exp(-4 * np.log(2) * (z**2))
         lorentzian = 1 / (1 + 4 * (z**2))
 
@@ -77,7 +77,6 @@ class MatchingWrapper:
         )
 
     def opt_fun(self, var):
-
         mu = var[: self.n_shifts]
         sigma = np.exp(var[self.n_shifts : 2 * self.n_shifts])
         m = self.sigmoid(var[2 * self.n_shifts :])
@@ -91,7 +90,7 @@ class MatchingWrapper:
             + np.sum(np.square(sigma))
             + np.sum(
                 np.clip(
-                    eps
+                    self.eps
                     + mu[:-1]
                     + self.shifts_aligned[:-1]
                     - mu[1:]
@@ -121,11 +120,9 @@ class MatchingWrapper:
             )
             > self.thr
         ):
-
             self.score = -100
 
         else:
-
             x0 = np.concatenate(
                 [
                     np.zeros(self.n_shifts),
